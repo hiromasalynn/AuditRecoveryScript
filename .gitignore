@@ -1,0 +1,10 @@
+# Output files from RestoreAuditLog.ps1
+_01_OldValue_Before*.txt
+_02_NewValue_After*.txt
+
+# Logs (if any)
+*.log
+
+# Temporary files
+temp/
+*.tmp
