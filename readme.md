@@ -31,7 +31,7 @@ $baseDir = "C:\Users\baseDir\AuditRecoveryScript\Output"
 
 ### PowerShell で実行
 ```powershell
-cd "C:\Users\hongchanglin\OneDrive - Microsoft\デスクトップ\VSCode\AuditRecoveryScript"
+cd "C:\Users\baseDir\AuditRecoveryScript\"
 .\RestoreAuditLog.ps1
 ```
 

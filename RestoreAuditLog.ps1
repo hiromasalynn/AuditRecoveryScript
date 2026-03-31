@@ -68,9 +68,34 @@ try {
     $innerObject = $innerJsonString | ConvertFrom-Json 
 
     # 値を抽出
-    $oldValue = $innerObject[0].OldValue
-    $newValue = $innerObject[0].NewValue
+    $oldValue = $innerObject[0].OldValue | ConvertFrom-Json
+    $newValue = $innerObject[0].NewValue | ConvertFrom-Json
 
+    # アプリケーションのリストをソートしてから出力（順序の違いを回避）
+    $oldApps = $oldValue.Conditions.Applications.Include[0].Applications | Sort-Object
+    $newApps = $newValue.Conditions.Applications.Include[0].Applications | Sort-Object
+
+    $oldValue.Conditions.Applications.Include[0].Applications = $oldApps
+    $newValue.Conditions.Applications.Include[0].Applications = $newApps
+
+    # 旧値と新値を比較
+    $diff = Compare-Object `
+            -ReferenceObject $oldApps `
+            -DifferenceObject $newApps `
+
+    Write-Host "`n--- アプリケーションの変更点 ---" -ForegroundColor Cyan
+
+    foreach ($item in $diff) {
+        switch ($item.SideIndicator) {
+            '<=' {
+                Write-Host "REMOVED: $($item.InputObject)" -ForegroundColor Red
+            }
+            '=>' {
+                Write-Host "ADDED  : $($item.InputObject)" -ForegroundColor Green
+            }
+        }
+    }
+    
     # 出力ファイルを作成（タイムスタンプ付き、上書きを回避）
     $timestamp = (Get-Date).ToString('yyyyMMdd_HHmmss')
     $oldFile = Join-Path $baseDir "_01_OldValue_Before_${timestamp}.txt"
@@ -79,9 +104,11 @@ try {
     # ディレクトリが存在しない場合は作成してからファイルを書き出す
     if (-not (Test-Path $baseDir)) {
     New-Item -ItemType Directory -Path $baseDir -Force
-}
-    $oldValue | Out-File -FilePath $oldFile -Encoding utf8
-    $newValue | Out-File -FilePath $newFile -Encoding utf8
+    }
+    
+    # JSON をファイルに保存
+    $oldValue | ConvertTo-Json -Depth 10 | Out-File -FilePath $oldFile -Encoding utf8
+    $newValue | ConvertTo-Json -Depth 10 | Out-File -FilePath $newFile -Encoding utf8
 
     # 完了レポート
     Write-Host "`n--- エクスポート完了 ---" -ForegroundColor Cyan
