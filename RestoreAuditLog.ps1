@@ -1,8 +1,41 @@
-# 変数の設定
-$baseDir = "C:\Users\baseDir\AuditRecoveryScript\Output"
+<#
+  .SYNOPSIS
+  条件付きアクセス ポリシーの変更に伴い分割記録された監査ログを結合・復元し、変更前後の差分を確認します。
 
-# ここは復元したい監査ログの Correlation ID に置き換えてください
-$correlationId = "3f7a3936-4fdc-49eb-bfd8-f249b03e3428" 
+  .DESCRIPTION
+  Microsoft Graph API を使用して、指定した相関 ID に紐づく分割された監査ログを取得し、
+  シーケンス番号順に結合・復元します。復元したデータから条件付きアクセス ポリシーの
+  変更前 (OldValue) と変更後 (NewValue) を抽出し、アプリケーションの追加・削除の差分を表示します。
+
+  .PARAMETER CorrelationId
+  復元したい監査ログの相関 ID を指定します。
+
+  .PARAMETER TenantId
+  接続先のテナント ID を指定します。ゲスト ユーザーで実行する場合はテナント ID の指定が必要です。
+
+  .PARAMETER BaseDir
+  結果ファイルの出力先フォルダーのパスを指定します。既定値はスクリプトと同階層の Output フォルダーです。
+
+  .PARAMETER Depth
+  ConvertTo-Json / ConvertFrom-Json の深さを指定します。既定値は 10 です。
+  取得したデータの構造が深い場合は、より大きな値を指定してください。
+
+  .EXAMPLE
+  .\AuditLogRecovery.ps1 -CorrelationId "3f7a3936-4fdc-49eb-bfd8-f249b03e3428"
+
+  .EXAMPLE
+  .\AuditLogRecovery.ps1 -CorrelationId "3f7a3936-4fdc-49eb-bfd8-f249b03e3428" -TenantId "contoso.onmicrosoft.com"
+
+  .EXAMPLE
+  .\AuditLogRecovery.ps1 -CorrelationId "3f7a3936-4fdc-49eb-bfd8-f249b03e3428" -TenantId "contoso.onmicrosoft.com" -BaseDir "C:\Temp\Output" -Depth 10
+#>
+
+Param(
+    [Parameter(ValueFromPipeline = $true, mandatory = $true)][String]$CorrelationId,
+    [Parameter(ValueFromPipeline = $true, mandatory = $false)][String]$TenantId,
+    [Parameter(ValueFromPipeline = $true, mandatory = $false)][String]$BaseDir = (Join-Path $PSScriptRoot "Output"),
+    [Parameter(ValueFromPipeline = $true, mandatory = $false)][Int]$Depth = 10
+)
 
 try {
     # Microsoft.Graph モジュールの存在を確認
@@ -12,16 +45,21 @@ try {
     }
 
     # 認証と接続（インタラクティブ認証）
-    Connect-MgGraph -Scopes "AuditLog.Read.All", "Directory.Read.All"
+    if ($TenantId) {
+        Connect-MgGraph -Scopes "AuditLog.Read.All", "Directory.Read.All" -TenantId $TenantId
+    }
+    else {
+        Connect-MgGraph -Scopes "AuditLog.Read.All", "Directory.Read.All"
+    }
 
     # Microsoft Graph からログを取得
-    $rawResponse = Get-MgAuditLogDirectoryAudit -Filter "correlationId eq '$correlationId'" -All
+    $rawResponse = Get-MgAuditLogDirectoryAudit -Filter "correlationId eq '$CorrelationId'" -All
 
     # JSON に変換
-    $loadedData = $rawResponse | ConvertTo-Json -Depth 10
+    $loadedData = $rawResponse | ConvertTo-Json -Depth $Depth
 
     # ログの実体を抽出
-    $parsedData = $loadedData | ConvertFrom-Json -Depth 10
+    $parsedData = $loadedData | ConvertFrom-Json -Depth $Depth
     $count = $parsedData.Count
     if ($count -eq 0) {
         Write-Host "--- 監査ログを取得できませんでした ---" -ForegroundColor Yellow
@@ -31,7 +69,6 @@ try {
     Write-Host "--- Microsoft Graph からデータ取得完了 ---" -ForegroundColor Cyan
     Write-Host "対象の相関 ID: $($rawResponse[0].CorrelationId)" -ForegroundColor Green
     Write-Host "取得した監査ログ件数: $count 件" -ForegroundColor Green
-    #Write-Host $parsedData -ForegroundColor White
 
     # AdditionalDetails から seq フィールドを抽出して再構成
     $extractedDetails = $parsedData | ForEach-Object {
@@ -98,17 +135,17 @@ try {
     
     # 出力ファイルを作成（タイムスタンプ付き、上書きを回避）
     $timestamp = (Get-Date).ToString('yyyyMMdd_HHmmss')
-    $oldFile = Join-Path $baseDir "_01_OldValue_Before_${timestamp}.txt"
-    $newFile = Join-Path $baseDir "_02_NewValue_After_${timestamp}.txt"
+    $oldFile = Join-Path $BaseDir "_01_OldValue_Before_${timestamp}.txt"
+    $newFile = Join-Path $BaseDir "_02_NewValue_After_${timestamp}.txt"
 
     # ディレクトリが存在しない場合は作成してからファイルを書き出す
-    if (-not (Test-Path $baseDir)) {
-    New-Item -ItemType Directory -Path $baseDir -Force
+    if (-not (Test-Path $BaseDir)) {
+        New-Item -ItemType Directory -Path $BaseDir -Force
     }
     
     # JSON をファイルに保存
-    $oldValue | ConvertTo-Json -Depth 10 | Out-File -FilePath $oldFile -Encoding utf8
-    $newValue | ConvertTo-Json -Depth 10 | Out-File -FilePath $newFile -Encoding utf8
+    $oldValue | ConvertTo-Json -Depth $Depth | Out-File -FilePath $oldFile -Encoding utf8
+    $newValue | ConvertTo-Json -Depth $Depth | Out-File -FilePath $newFile -Encoding utf8
 
     # 完了レポート
     Write-Host "`n--- エクスポート完了 ---" -ForegroundColor Cyan
