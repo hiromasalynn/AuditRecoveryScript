@@ -56,6 +56,14 @@ Update-Module -Name Microsoft.Graph
 
 復元したい監査ログの相関 ID を事前に確認しておきます。Microsoft Entra 管理センター > [監視と正常性] > [監査ログ] から該当のログ エントリを開き、[相関 ID] フィールドの値を控えておきます。
 
+### 実行ポリシーの確認
+
+スクリプトの実行がブロックされる場合は、現在の PowerShell セッションの実行ポリシーを変更してから実行してください。以下のコマンドは現在のセッションにのみ影響し、システム全体の設定は変更しません。
+
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope Process
+```
+
 ## 2. スクリプトの実行
 
 [スクリプト一式](https://github.com/jpazureid/audit-log-recovery/archive/refs/heads/main.zip) をダウンロードし、任意の場所 (以下では C:\AuditLogRecovery) に展開します。
